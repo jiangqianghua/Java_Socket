@@ -12,7 +12,12 @@ public class Server {
 
     public static void main(String[] args) {
 
-
+        TCPServer tcpServer = new TCPServer(TCPConstants.PORT_SERVER);
+        boolean isSuccess = tcpServer.start();
+        if(!isSuccess){
+            System.out.println("Start TCP server failed");
+            return ;
+        }
         ServerProvider.start(TCPConstants.PORT_SERVER);
         try{
             System.in.read();
@@ -22,6 +27,6 @@ public class Server {
 
 
         ServerProvider.stop();
-
+        tcpServer.stop();
     }
 }
