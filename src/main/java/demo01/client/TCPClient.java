@@ -1,11 +1,13 @@
 package demo01.client;
 
 import demo01.client.bean.ServerInfo;
+import demo01.clink.net.qiujuer.clink.utils.CloseUtils;
 
 import java.io.*;
 import java.net.Inet4Address;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 
 /**
  * @Author: jiang qiang hua
@@ -17,7 +19,7 @@ public class TCPClient {
 
     public static void linkWith(ServerInfo info)throws IOException{
         Socket socket = new Socket();
-        socket.setSoTimeout(3000);
+        socket.setSoTimeout(30000000);
         socket.connect(new InetSocketAddress(Inet4Address.getByName(info.getAddress()),info.getPort()));
 
         System.out.println("已发起服务器连接，并进入后的流程");
@@ -26,7 +28,11 @@ public class TCPClient {
         System.out.println("服务器端信息:"+socket.getInetAddress() +":"+socket.getPort());
 
         try{
-            todo(socket);
+            ReadHandler readHandler = new ReadHandler(socket.getInputStream());
+            readHandler.start();
+            write(socket);
+
+            readHandler.exit();
         }catch (Exception e){
             System.out.println("异常关闭:"+e.getMessage());
         }
@@ -34,31 +40,72 @@ public class TCPClient {
         System.out.println("客户端退出");
     }
 
-    private static void todo(Socket client) throws IOException{
+    private static void write(Socket client) throws IOException{
         InputStream in = System.in;
         BufferedReader input = new BufferedReader(new InputStreamReader(in));
 
         OutputStream outputStream = client.getOutputStream();
         PrintStream socketPrintStream = new PrintStream(outputStream);
 
-        InputStream inputStream = client.getInputStream();
-        BufferedReader socketBufferReader = new BufferedReader(new InputStreamReader(inputStream));
-
-        boolean flag = true ;
-
         do{
             String str = input.readLine() ;
             socketPrintStream.println(str);
 
-            String echo = socketBufferReader.readLine();
-            if("bye".equals(echo)){
-                flag = true ;
-            }else{
-                System.out.println("收到服务器消息:"+echo);
+            if("00bye00".equals(str)){
+                break;
             }
-        }while (flag);
-
-        socketBufferReader.close();
+        }while (true);
         socketPrintStream.close();
+    }
+
+
+
+    /**
+     * 接受线程
+     */
+    private static class ReadHandler extends Thread{
+        private boolean done = false ;
+
+        private final InputStream inputStream ;
+
+        ReadHandler(InputStream inputStream){
+            this.inputStream = inputStream ;
+        }
+
+        @Override
+        public void run() {
+            super.run();
+
+            try {
+                BufferedReader socketInput = new BufferedReader(new InputStreamReader(inputStream));
+                do{
+                    String str = null;
+                    try {
+                        str = socketInput.readLine();
+                    }catch (SocketTimeoutException e){
+                        continue;
+                    }
+                    if (str == null) {
+                        System.out.println("客户端无法接受到数据");
+                        break;
+                    }
+                    System.out.println(str);
+                }while(!done);
+                socketInput.close();
+            }catch (Exception e){
+                e.printStackTrace();
+                if(!done){
+                    System.out.println("客户端异常断开" + e.getMessage());
+                }
+            }finally {
+                CloseUtils.close(inputStream);
+            }
+
+        }
+
+        void exit(){
+            done = true;
+            CloseUtils.close(inputStream);
+        }
     }
 }

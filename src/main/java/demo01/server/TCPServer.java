@@ -1,11 +1,12 @@
 package demo01.server;
 
-import java.io.BufferedReader;
+import demo01.server.handler.ClientHandler;
+
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @Author: jiang qiang hua
@@ -18,6 +19,8 @@ public class TCPServer {
     private final int port ;
 
     private ClientListener mListener ;
+
+    private List<ClientHandler> clientHandlerList = new ArrayList<>();
 
     public TCPServer(int port){
         this.port = port ;
@@ -39,9 +42,14 @@ public class TCPServer {
         if(mListener != null){
             mListener.exit();
         }
+
+        for(ClientHandler clientHandler:clientHandlerList){
+            clientHandler.exit();
+        }
+        clientHandlerList.clear();
     }
 
-    private static class ClientListener extends Thread{
+    private  class ClientListener extends Thread{
         private ServerSocket server ;
         private boolean done = false ;
 
@@ -52,18 +60,25 @@ public class TCPServer {
 
         @Override
         public void run() {
-
-
             System.out.println("服务器准备就绪!");
             do{
                 Socket client ;
                 try {
                     client = server.accept();
-                    ClientHandler clientHandler = new ClientHandler(client);
-                    clientHandler.start();
+                    ClientHandler clientHandler = new ClientHandler(client, new ClientHandler.CloseNotify() {
+                        @Override
+                        public void onSelfClosed(ClientHandler handler) {
+                            clientHandlerList.remove(handler);
+                        }
+                    });
+                    // 启动读线程
+                    clientHandler.readToPrint();
+                    clientHandlerList.add(clientHandler);
                 }catch (IOException e){
+                    System.out.println("客户端连接异常:"+e.getMessage());
                     continue;
                 }
+
             }while (!done);
             System.out.println("服务器已经关闭");
         }
@@ -76,48 +91,12 @@ public class TCPServer {
                 e.printStackTrace();
             }
         }
+    }
 
-        private static class ClientHandler extends Thread{
-            private Socket socket ;
 
-            private boolean flag = true ;
-
-            ClientHandler(Socket socket){
-                this.socket = socket ;
-            }
-
-            @Override
-            public void run() {
-                super.run();
-
-                System.out.println("新客户端连接:"+socket.getInetAddress() + ":"+ socket.getPort());
-                try {
-                    PrintStream socketOutPut = new PrintStream(socket.getOutputStream());
-                    BufferedReader socketInput = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                    do{
-                        String str = socketInput.readLine();
-                        if("bye".equals(str)){
-                            flag = false ;
-                            socketOutPut.println("bye");
-                        }else{
-                            System.out.print(str);
-                            socketOutPut.println("回送:"+str.length());
-                        }
-                    }while(flag);
-                    socketInput.close();
-                    socketOutPut.close();
-                }catch (Exception e){
-                    e.printStackTrace();
-                }finally {
-                    try{
-                        socket.close();
-                    }catch (IOException e){
-                        e.printStackTrace();
-                    }
-                }
-
-                System.out.println("客户端退出:" +socket.getInetAddress() + ":"+socket.getPort());
-            }
+    public void broadcast(String str) throws Exception{
+        for(ClientHandler clientHandler:clientHandlerList){
+            clientHandler.send(str);
         }
     }
 }
