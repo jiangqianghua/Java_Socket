@@ -2,7 +2,7 @@ package chat.client;
 
 import chat.client.bean.ServerInfo;
 
-import java.io.IOException;
+import java.io.*;
 
 /**
  * @Author: jiang qiang hua
@@ -17,11 +17,32 @@ public class Client {
         System.out.println(serverInfo.getSn() + " " + serverInfo.getAddress() + ":" + serverInfo.getPort());
 
         if(serverInfo != null){
+            TCPClient tcpClient = null ;
             try{
-                TCPClient.linkWith(serverInfo);
+                tcpClient = TCPClient.startWith(serverInfo);
+                if(tcpClient == null)
+                    return ;
+                write(tcpClient);
             }catch (IOException e){
                 e.printStackTrace();
+            }finally {
+                if(tcpClient != null)
+                    tcpClient.exit();
             }
         }
+    }
+
+    private static void write(TCPClient tcpClient) throws IOException{
+        InputStream in = System.in;
+        BufferedReader input = new BufferedReader(new InputStreamReader(in));
+
+        do{
+            String str = input.readLine() ;
+            tcpClient.send(str);
+
+            if("00bye00".equals(str)){
+                break;
+            }
+        }while (true);
     }
 }

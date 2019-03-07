@@ -17,7 +17,27 @@ import java.net.SocketTimeoutException;
  **/
 public class TCPClient {
 
-    public static void linkWith(ServerInfo info)throws IOException{
+    private final Socket socket ;
+    private final ReadHandler readHandler ;
+    private final PrintStream printStream ;
+
+    public TCPClient(Socket socket, ReadHandler readHandler)throws IOException {
+        this.socket = socket;
+        this.readHandler = readHandler;
+        this.printStream = new PrintStream(socket.getOutputStream());
+    }
+
+    public void exit(){
+        readHandler.exit();
+        CloseUtils.close(printStream);
+        CloseUtils.close(socket);
+    }
+
+    public void send(String msg){
+        printStream.println(msg);
+    }
+
+    public static TCPClient startWith(ServerInfo info)throws IOException{
         Socket socket = new Socket();
         socket.setSoTimeout(30000000);
         socket.connect(new InetSocketAddress(Inet4Address.getByName(info.getAddress()),info.getPort()));
@@ -30,14 +50,17 @@ public class TCPClient {
         try{
             ReadHandler readHandler = new ReadHandler(socket.getInputStream());
             readHandler.start();
-            write(socket);
+            return new TCPClient(socket,readHandler);
+           // write(socket);
 
-            readHandler.exit();
+           // readHandler.exit();
         }catch (Exception e){
-            System.out.println("异常关闭:"+e.getMessage());
+            System.out.println("连接异常:"+e.getMessage());
+            CloseUtils.close(socket);
         }
-        socket.close();
-        System.out.println("客户端退出");
+        return null ;
+//        socket.close();
+//        System.out.println("客户端退出");
     }
 
     private static void write(Socket client) throws IOException{
